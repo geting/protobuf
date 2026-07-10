@@ -6,6 +6,20 @@
 
 set -e
 
+verify_sha256() {
+  archive=$1
+  expected=$2
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "$expected  $archive" | sha256sum -c -
+  elif command -v shasum >/dev/null 2>&1; then
+    actual=`shasum -a 256 "$archive" | awk '{print $1}'`
+    test "$actual" = "$expected"
+  else
+    echo "No SHA-256 verification tool found." >&2
+    exit 1
+  fi
+}
+
 if [ ! -z "$@" ]; then
   for argument in "$@"; do
     case $argument in
@@ -31,12 +45,16 @@ fi
 # directory is set up as an SVN external.
 if test ! -e gmock; then
   echo "Google Mock not present.  Fetching gmock-1.7.0 from the web..."
-  curl $curlopts -L -O https://github.com/google/googlemock/archive/release-1.7.0.zip
+  curl $curlopts -fL -O https://github.com/google/googlemock/archive/release-1.7.0.zip
+  verify_sha256 release-1.7.0.zip \
+    407992e9ef17a08339cd383c33dbaff923969cfa01f8e4ceaeea679400016d85
   unzip -q release-1.7.0.zip
   rm release-1.7.0.zip
   mv googlemock-release-1.7.0 gmock
 
-  curl $curlopts -L -O https://github.com/google/googletest/archive/release-1.7.0.zip
+  curl $curlopts -fL -O https://github.com/google/googletest/archive/release-1.7.0.zip
+  verify_sha256 release-1.7.0.zip \
+    b58cb7547a28b2c718d1e38aee18a3659c9e3ff52440297e965f5edffe34b6d0
   unzip -q release-1.7.0.zip
   rm release-1.7.0.zip
   mv googletest-release-1.7.0 gmock/gtest
