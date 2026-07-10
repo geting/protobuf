@@ -67,20 +67,6 @@ namespace java {
 using internal::WireFormat;
 using internal::WireFormatLite;
 
-namespace {
-bool GenerateHasBits(const Descriptor* descriptor) {
-  return SupportFieldPresence(descriptor->file()) ||
-      HasRepeatedFields(descriptor);
-}
-
-string MapValueImmutableClassdName(const Descriptor* descriptor,
-                                   ClassNameResolver* name_resolver) {
-  const FieldDescriptor* value_field = descriptor->FindFieldByName("value");
-  GOOGLE_CHECK_EQ(FieldDescriptor::TYPE_MESSAGE, value_field->type());
-  return name_resolver->GetImmutableClassName(value_field->message_type());
-}
-}  // namespace
-
 // ===================================================================
 ImmutableMessageLiteGenerator::ImmutableMessageLiteGenerator(
     const Descriptor* descriptor, Context* context)
@@ -787,7 +773,7 @@ void ImmutableMessageLiteGenerator::GenerateDynamicMethodIsInitialized(
               "    return null;\n"
               "  }\n"
               "}\n",
-              "type", MapValueImmutableClassdName(field->message_type(),
+              "type", MapValueImmutableClassName(field->message_type(),
                                                   name_resolver_),
               "name", info->capitalized_name);
           } else {
