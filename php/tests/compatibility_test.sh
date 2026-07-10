@@ -34,7 +34,7 @@ cd $(dirname $0)
 case "$1" in
   ""|3.3.0)
     OLD_VERSION=3.3.0
-    OLD_VERSION_PROTOC=http://repo1.maven.org/maven2/com/google/protobuf/protoc/3.3.0/protoc-3.3.0-linux-x86_64.exe
+    OLD_VERSION_PROTOC=https://repo1.maven.org/maven2/com/google/protobuf/protoc/3.3.0/protoc-3.3.0-linux-x86_64.exe
     ;;
   *)
     echo "[ERROR]: Unknown version number: $1"

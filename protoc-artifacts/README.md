@@ -119,7 +119,7 @@ dist/protoc-3.0.0-beta-4-linux-x86_32.zip
 dist/protoc-3.0.0-beta-4-linux-x86_64.zip
 ```
 Before running the script, make sure the artifacts are accessible from:
-http://repo1.maven.org/maven2/com/google/protobuf/protoc/
+https://repo1.maven.org/maven2/com/google/protobuf/protoc/
 
 ### Tips for deploying on Linux
 We build on Centos 6.6 to provide a good compatibility for not very new

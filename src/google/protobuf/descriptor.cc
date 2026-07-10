@@ -3839,6 +3839,12 @@ bool DescriptorBuilder::AddSymbol(
   // Use its file as the parent instead.
   if (parent == NULL) parent = file_;
 
+  if (full_name.find('\0') != string::npos) {
+    AddError(full_name, proto, DescriptorPool::ErrorCollector::NAME,
+             "\"" + full_name + "\" contains null character.");
+    return false;
+  }
+
   if (tables_->AddSymbol(full_name, symbol)) {
     if (!file_tables_->AddAliasUnderParent(parent, name, symbol)) {
       // This is only possible if there was already an error adding something of
@@ -3876,6 +3882,12 @@ bool DescriptorBuilder::AddSymbol(
 
 void DescriptorBuilder::AddPackage(
     const string& name, const Message& proto, const FileDescriptor* file) {
+  if (name.find('\0') != string::npos) {
+    AddError(name, proto, DescriptorPool::ErrorCollector::NAME,
+             "\"" + name + "\" contains null character.");
+    return;
+  }
+
   if (tables_->AddSymbol(name, Symbol(file))) {
     // Success.  Also add parent package, if any.
     string::size_type dot_pos = name.find_last_of('.');
@@ -4132,6 +4144,13 @@ const FileDescriptor* DescriptorBuilder::BuildFileImpl(
     result->package_ = tables_->AllocateString("");
   }
   result->pool_ = pool_;
+
+  if (result->name().find('\0') != string::npos) {
+    AddError(result->name(), proto, DescriptorPool::ErrorCollector::NAME,
+             "\"" + result->name() + "\" contains null character.");
+    tables_->RollbackToLastCheckpoint();
+    return NULL;
+  }
 
   // Add to tables.
   if (!tables_->AddFile(result)) {

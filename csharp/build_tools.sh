@@ -15,6 +15,10 @@ EOF
 fi
 
 VERSION_NUMBER=$1
+if [[ ! "$VERSION_NUMBER" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]]; then
+  echo "[ERROR] Invalid version number: $VERSION_NUMBER" >&2
+  exit 1
+fi
 # <directory name> <binary file name> pairs.
 declare -a FILE_NAMES=(          \
   windows_x86 windows-x86_32.exe \
@@ -40,9 +44,9 @@ for((i=0;i<${#FILE_NAMES[@]};i+=2));do
   fi
 
   BINARY_NAME=${FILE_NAMES[$(($i+1))]}
-  BINARY_URL=http://repo1.maven.org/maven2/com/google/protobuf/protoc/${VERSION_NUMBER}/protoc-${VERSION_NUMBER}-${BINARY_NAME}
+  BINARY_URL=https://repo1.maven.org/maven2/com/google/protobuf/protoc/${VERSION_NUMBER}/protoc-${VERSION_NUMBER}-${BINARY_NAME}
 
-  if ! wget ${BINARY_URL} -O protoc/$DIR_NAME/$TARGET_BINARY &> /dev/null; then
+  if ! wget "$BINARY_URL" -O "protoc/$DIR_NAME/$TARGET_BINARY" &> /dev/null; then
     echo "[ERROR] Failed to download ${BINARY_URL}" >&2
     echo "[ERROR] Skipped $protoc-${VERSION_NAME}-${DIR_NAME}" >&2
     continue

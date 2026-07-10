@@ -725,14 +725,21 @@ bool WireFormat::ParseAndMergeMessageSetItem(
   //   required int32 type_id = 2;
   //   required data message = 3;
 
-  uint32 last_type_id = 0;
+  enum MessageSetItemState {
+    MESSAGESET_ITEM_NO_TAG,
+    MESSAGESET_ITEM_HAS_TYPE,
+    MESSAGESET_ITEM_HAS_PAYLOAD,
+    MESSAGESET_ITEM_DONE
+  };
+  MessageSetItemState state = MESSAGESET_ITEM_NO_TAG;
+  uint32 type_id = 0;
 
   // Once we see a type_id, we'll look up the FieldDescriptor for the
   // extension.
   const FieldDescriptor* field = NULL;
 
-  // If we see message data before the type_id, we'll append it to this so
-  // we can parse it later.
+  // If we see message data before the type_id, save it so we can parse it
+  // later.
   string message_data;
 
   while (true) {
@@ -741,30 +748,31 @@ bool WireFormat::ParseAndMergeMessageSetItem(
 
     switch (tag) {
       case WireFormatLite::kMessageSetTypeIdTag: {
-        uint32 type_id;
-        if (!input->ReadVarint32(&type_id)) return false;
-        last_type_id = type_id;
-        field = message_reflection->FindKnownExtensionByNumber(type_id);
-
-        if (!message_data.empty()) {
-          // We saw some message data before the type_id.  Have to parse it
-          // now.
+        uint32 parsed_type_id;
+        if (!input->ReadVarint32(&parsed_type_id)) return false;
+        if (state == MESSAGESET_ITEM_NO_TAG) {
+          type_id = parsed_type_id;
+          field = message_reflection->FindKnownExtensionByNumber(type_id);
+          state = MESSAGESET_ITEM_HAS_TYPE;
+        } else if (state == MESSAGESET_ITEM_HAS_PAYLOAD) {
+          type_id = parsed_type_id;
+          field = message_reflection->FindKnownExtensionByNumber(type_id);
           io::ArrayInputStream raw_input(message_data.data(),
                                          message_data.size());
           io::CodedInputStream sub_input(&raw_input);
-          if (!ParseAndMergeMessageSetField(last_type_id, field, message,
+          if (!ParseAndMergeMessageSetField(type_id, field, message,
                                             &sub_input)) {
             return false;
           }
           message_data.clear();
+          state = MESSAGESET_ITEM_DONE;
         }
 
         break;
       }
 
       case WireFormatLite::kMessageSetMessageTag: {
-        if (last_type_id == 0) {
-          // We haven't seen a type_id yet.  Append this data to message_data.
+        if (state == MESSAGESET_ITEM_NO_TAG) {
           string temp;
           uint32 length;
           if (!input->ReadVarint32(&length)) return false;
@@ -773,12 +781,15 @@ bool WireFormat::ParseAndMergeMessageSetItem(
           io::CodedOutputStream coded_output(&output_stream);
           coded_output.WriteVarint32(length);
           coded_output.WriteString(temp);
-        } else {
-          // Already saw type_id, so we can parse this directly.
-          if (!ParseAndMergeMessageSetField(last_type_id, field, message,
+          state = MESSAGESET_ITEM_HAS_PAYLOAD;
+        } else if (state == MESSAGESET_ITEM_HAS_TYPE) {
+          if (!ParseAndMergeMessageSetField(type_id, field, message,
                                             input)) {
             return false;
           }
+          state = MESSAGESET_ITEM_DONE;
+        } else {
+          if (!SkipField(input, tag, NULL)) return false;
         }
 
         break;
