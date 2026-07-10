@@ -53,9 +53,11 @@
 #include <google/protobuf/compiler/subprocess.h>
 #include <google/protobuf/compiler/code_generator.h>
 #include <google/protobuf/compiler/command_line_interface.h>
+#include <google/protobuf/compiler/zip_writer.h>
 #include <google/protobuf/unittest.pb.h>
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/stubs/substitute.h>
@@ -90,6 +92,15 @@ namespace {
 
 bool FileExists(const string& path) {
   return File::Exists(path);
+}
+
+TEST(ZipWriterTest, ReportsDirectoryWriteError) {
+  char buffer[30];
+  io::ArrayOutputStream output(buffer, sizeof(buffer));
+  ZipWriter writer(&output);
+
+  EXPECT_TRUE(writer.Write("", ""));
+  EXPECT_FALSE(writer.WriteDirectory());
 }
 
 class CommandLineInterfaceTest : public testing::Test {
@@ -132,6 +143,8 @@ class CommandLineInterfaceTest : public testing::Test {
   void SetInputsAreProtoPathRelative(bool enable) {
     cli_.SetInputsAreProtoPathRelative(enable);
   }
+
+  const string& TempDirectory() const { return temp_directory_; }
 
   // -----------------------------------------------------------------
   // Methods to check the test results (called after Run()).
@@ -1505,6 +1518,27 @@ TEST_F(CommandLineInterfaceTest, OutputWriteError) {
 
   ExpectErrorSubstring(output_file + ": Is a directory");
 }
+
+#ifndef _WIN32
+TEST_F(CommandLineInterfaceTest, ZipOutputWriteError) {
+  if (access("/dev/full", W_OK) != 0) {
+    return;
+  }
+
+  CreateTempFile("foo.proto",
+    "syntax = \"proto2\";\n"
+    "message Foo {}\n");
+
+  string output_file = TempDirectory() + "/output.zip";
+  ASSERT_EQ(0, symlink("/dev/full", output_file.c_str()));
+
+  Run("protocol_compiler --test_out=$tmpdir/output.zip "
+      "--proto_path=$tmpdir foo.proto");
+
+  unlink(output_file.c_str());
+  ExpectErrorSubstring("No space left on device");
+}
+#endif
 
 TEST_F(CommandLineInterfaceTest, PluginOutputWriteError) {
   CreateTempFile("foo.proto",
