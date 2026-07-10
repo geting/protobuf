@@ -693,6 +693,7 @@ python_EXTRA_DIST=                                                           \
   python/google/protobuf/internal/descriptor_test.py                         \
   python/google/protobuf/internal/encoder.py                                 \
   python/google/protobuf/internal/enum_type_wrapper.py                       \
+  python/google/protobuf/internal/enum_type_wrapper_test.py                  \
   python/google/protobuf/internal/factory_test1.proto                        \
   python/google/protobuf/internal/factory_test2.proto                        \
   python/google/protobuf/internal/file_options_test.proto                    \
@@ -703,6 +704,7 @@ python_EXTRA_DIST=                                                           \
   python/google/protobuf/internal/json_format_test.py                        \
   python/google/protobuf/internal/message_factory_test.py                    \
   python/google/protobuf/internal/message_listener.py                        \
+  python/google/protobuf/internal/message_listener_test.py                   \
   python/google/protobuf/internal/message_set_extensions.proto               \
   python/google/protobuf/internal/message_test.py                            \
   python/google/protobuf/internal/missing_enum_values.proto                  \
@@ -715,6 +717,7 @@ python_EXTRA_DIST=                                                           \
   python/google/protobuf/internal/python_protobuf.cc                         \
   python/google/protobuf/internal/reflection_test.py                         \
   python/google/protobuf/internal/service_reflection_test.py                 \
+  python/google/protobuf/internal/service_test.py                            \
   python/google/protobuf/internal/symbol_database_test.py                    \
   python/google/protobuf/internal/test_bad_identifiers.proto                 \
   python/google/protobuf/internal/test_util.py                               \
@@ -722,6 +725,7 @@ python_EXTRA_DIST=                                                           \
   python/google/protobuf/internal/text_encoding_test.py                      \
   python/google/protobuf/internal/text_format_test.py                        \
   python/google/protobuf/internal/type_checkers.py                           \
+  python/google/protobuf/internal/type_checkers_test.py                      \
   python/google/protobuf/internal/unknown_fields_test.py                     \
   python/google/protobuf/internal/well_known_types.py                        \
   python/google/protobuf/internal/well_known_types.py                        \
