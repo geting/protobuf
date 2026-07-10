@@ -563,28 +563,57 @@ TEST(WireFormatTest, ParseMessageSet) {
   EXPECT_EQ(message_set.DebugString(), dynamic_message_set.DebugString());
 }
 
-TEST(WireFormatTest, ParseMessageSetWithReverseTagOrder) {
+namespace {
+
+string BuildMessageSetItemStart() {
   string data;
   {
-    unittest::TestMessageSetExtension1 message;
-    message.set_i(123);
-    // Build a MessageSet manually with its message content put before its
-    // type_id.
     io::StringOutputStream output_stream(&data);
     io::CodedOutputStream coded_output(&output_stream);
     coded_output.WriteTag(WireFormatLite::kMessageSetItemStartTag);
-    // Write the message content first.
+  }
+  return data;
+}
+
+string BuildMessageSetItemEnd() {
+  string data;
+  {
+    io::StringOutputStream output_stream(&data);
+    io::CodedOutputStream coded_output(&output_stream);
+    coded_output.WriteTag(WireFormatLite::kMessageSetItemEndTag);
+  }
+  return data;
+}
+
+string BuildMessageSetTestExtension1(int value) {
+  string data;
+  {
+    unittest::TestMessageSetExtension1 message;
+    message.set_i(value);
+    io::StringOutputStream output_stream(&data);
+    io::CodedOutputStream coded_output(&output_stream);
     WireFormatLite::WriteTag(WireFormatLite::kMessageSetMessageNumber,
                              WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
                              &coded_output);
     coded_output.WriteVarint32(message.ByteSize());
     message.SerializeWithCachedSizes(&coded_output);
-    // Write the type id.
-    uint32 type_id = message.GetDescriptor()->extension(0)->number();
-    WireFormatLite::WriteUInt32(WireFormatLite::kMessageSetTypeIdNumber,
-                                type_id, &coded_output);
-    coded_output.WriteTag(WireFormatLite::kMessageSetItemEndTag);
   }
+  return data;
+}
+
+string BuildMessageSetItemTypeId(int extension_number) {
+  string data;
+  {
+    io::StringOutputStream output_stream(&data);
+    io::CodedOutputStream coded_output(&output_stream);
+    WireFormatLite::WriteUInt32(WireFormatLite::kMessageSetTypeIdNumber,
+                                extension_number, &coded_output);
+  }
+  return data;
+}
+
+void ValidateTestMessageSet(const string& test_case, const string& data) {
+  SCOPED_TRACE(test_case);
   {
     proto2_wireformat_unittest::TestMessageSet message_set;
     ASSERT_TRUE(message_set.ParseFromString(data));
@@ -603,6 +632,42 @@ TEST(WireFormatTest, ParseMessageSetWithReverseTagOrder) {
     EXPECT_EQ(123, message_set.GetExtension(
         unittest::TestMessageSetExtension1::message_set_extension).i());
   }
+}
+
+}  // namespace
+
+TEST(WireFormatTest, ParseMessageSetWithAnyTagOrder) {
+  string start = BuildMessageSetItemStart();
+  string end = BuildMessageSetItemEnd();
+  string id = BuildMessageSetItemTypeId(
+      unittest::TestMessageSetExtension1::descriptor()->extension(0)->number());
+  string message = BuildMessageSetTestExtension1(123);
+
+  ValidateTestMessageSet("id + message", start + id + message + end);
+  ValidateTestMessageSet("message + id", start + message + id + end);
+}
+
+TEST(WireFormatTest, ParseMessageSetWithDuplicateTags) {
+  string start = BuildMessageSetItemStart();
+  string end = BuildMessageSetItemEnd();
+  string id = BuildMessageSetItemTypeId(
+      unittest::TestMessageSetExtension1::descriptor()->extension(0)->number());
+  string other_id = BuildMessageSetItemTypeId(123456);
+  string message = BuildMessageSetTestExtension1(123);
+  string other_message = BuildMessageSetTestExtension1(321);
+
+  ValidateTestMessageSet("id + other_id + message",
+                         start + id + other_id + message + end);
+  ValidateTestMessageSet("id + message + other_id",
+                         start + id + message + other_id + end);
+  ValidateTestMessageSet("message + id + other_id",
+                         start + message + id + other_id + end);
+  ValidateTestMessageSet("id + message + other_message",
+                         start + id + message + other_message + end);
+  ValidateTestMessageSet("message + id + other_message",
+                         start + message + id + other_message + end);
+  ValidateTestMessageSet("message + other_message + id",
+                         start + message + other_message + id + end);
 }
 
 TEST(WireFormatTest, ParseBrokenMessageSet) {

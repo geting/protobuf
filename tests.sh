@@ -600,4 +600,5 @@ fi
 
 set -e  # exit immediately on error
 set -x  # display all commands
-eval "build_$1"
+build_function="build_$1"
+"$build_function"

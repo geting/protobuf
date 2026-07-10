@@ -660,10 +660,17 @@ bool ExtensionSet::ParseMessageSetItem(io::CodedInputStream* input,
   //   required int32 type_id = 2;
   //   required data message = 3;
 
-  uint32 last_type_id = 0;
+  enum MessageSetItemState {
+    MESSAGESET_ITEM_NO_TAG,
+    MESSAGESET_ITEM_HAS_TYPE,
+    MESSAGESET_ITEM_HAS_PAYLOAD,
+    MESSAGESET_ITEM_DONE
+  };
+  MessageSetItemState state = MESSAGESET_ITEM_NO_TAG;
+  uint32 type_id = 0;
 
-  // If we see message data before the type_id, we'll append it to this so
-  // we can parse it later.
+  // If we see message data before the type_id, save it so we can parse it
+  // later.
   string message_data;
 
   while (true) {
@@ -672,30 +679,30 @@ bool ExtensionSet::ParseMessageSetItem(io::CodedInputStream* input,
 
     switch (tag) {
       case WireFormatLite::kMessageSetTypeIdTag: {
-        uint32 type_id;
-        if (!input->ReadVarint32(&type_id)) return false;
-        last_type_id = type_id;
-
-        if (!message_data.empty()) {
-          // We saw some message data before the type_id.  Have to parse it
-          // now.
+        uint32 parsed_type_id;
+        if (!input->ReadVarint32(&parsed_type_id)) return false;
+        if (state == MESSAGESET_ITEM_NO_TAG) {
+          type_id = parsed_type_id;
+          state = MESSAGESET_ITEM_HAS_TYPE;
+        } else if (state == MESSAGESET_ITEM_HAS_PAYLOAD) {
+          type_id = parsed_type_id;
           io::CodedInputStream sub_input(
               reinterpret_cast<const uint8*>(message_data.data()),
               message_data.size());
           if (!ParseFieldMaybeLazily(WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
-                                     last_type_id, &sub_input,
+                                     type_id, &sub_input,
                                      extension_finder, field_skipper)) {
             return false;
           }
           message_data.clear();
+          state = MESSAGESET_ITEM_DONE;
         }
 
         break;
       }
 
       case WireFormatLite::kMessageSetMessageTag: {
-        if (last_type_id == 0) {
-          // We haven't seen a type_id yet.  Append this data to message_data.
+        if (state == MESSAGESET_ITEM_NO_TAG) {
           string temp;
           uint32 length;
           if (!input->ReadVarint32(&length)) return false;
@@ -704,13 +711,16 @@ bool ExtensionSet::ParseMessageSetItem(io::CodedInputStream* input,
           io::CodedOutputStream coded_output(&output_stream);
           coded_output.WriteVarint32(length);
           coded_output.WriteString(temp);
-        } else {
-          // Already saw type_id, so we can parse this directly.
+          state = MESSAGESET_ITEM_HAS_PAYLOAD;
+        } else if (state == MESSAGESET_ITEM_HAS_TYPE) {
           if (!ParseFieldMaybeLazily(WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
-                                     last_type_id, input,
+                                     type_id, input,
                                      extension_finder, field_skipper)) {
             return false;
           }
+          state = MESSAGESET_ITEM_DONE;
+        } else {
+          if (!field_skipper->SkipField(input, tag)) return false;
         }
 
         break;

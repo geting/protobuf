@@ -4,6 +4,7 @@
 
 import sys
 import os
+import subprocess
 
 class Language(object):
   def __init__(self, name, pathspec):
@@ -12,7 +13,7 @@ class Language(object):
 
 languages = [
   Language("C++", [
-      "':(glob)src/google/protobuf/*'",
+      ":(glob)src/google/protobuf/*",
       "src/google/protobuf/compiler/cpp",
       "src/google/protobuf/io",
       "src/google/protobuf/util",
@@ -54,12 +55,30 @@ if len(sys.argv) < 2:
   sys.exit(1)
 
 previous = sys.argv[1]
+if previous.startswith("-"):
+  print("Invalid previous release: %s" % previous)
+  sys.exit(1)
+
+with open(os.devnull, "w") as devnull:
+  if subprocess.call(
+      ["git", "rev-parse", "--verify", previous + "^{commit}"],
+      stdout=devnull, stderr=devnull) != 0:
+    print("Invalid previous release: %s" % previous)
+    sys.exit(1)
 
 for language in languages:
   print(language.name)
   sys.stdout.flush()
-  os.system(("git log --pretty=oneline --abbrev-commit %s...HEAD %s | " +
-             "sed -e 's/^/ - /'") % (previous, " ".join(language.pathspec)))
+  command = [
+      "git", "log", "--pretty=oneline", "--abbrev-commit",
+      previous + "...HEAD", "--"
+  ] + language.pathspec
+  process = subprocess.Popen(
+      command, stdout=subprocess.PIPE, universal_newlines=True)
+  for line in process.stdout:
+    print(" - " + line.rstrip())
+  if process.wait() != 0:
+    sys.exit(process.returncode)
   print("")
 
 print("To view a commit on GitHub: " +

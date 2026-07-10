@@ -3569,6 +3569,51 @@ TEST_F(ValidationErrorTest, InvalidPackageName) {
     "foo.proto: foo.$: NAME: \"$\" is not a valid identifier.\n");
 }
 
+#define STATIC_STR(str) string((str), sizeof(str) - 1)
+
+TEST_F(ValidationErrorTest, NullCharSymbolName) {
+  BuildFileWithErrors(
+    "name: \"bar.proto\" "
+    "package: \"foo\""
+    "message_type { "
+    "  name: '\\000\\001\\013.Bar' "
+    "  field { name: \"foo\" number: 9 label: LABEL_OPTIONAL type: TYPE_INT32 } "
+    "}",
+
+    STATIC_STR("bar.proto: foo.\0\x1\v.Bar: NAME: \"\0\x1\v.Bar\" is not a "
+               "valid identifier.\n"
+               "bar.proto: foo.\0\x1\v.Bar: NAME: \"\0\x1\v.Bar\" is not a "
+               "valid identifier.\n"
+               "bar.proto: foo.\0\x1\v.Bar: NAME: \"\0\x1\v.Bar\" is not a "
+               "valid identifier.\n"
+               "bar.proto: foo.\0\x1\v.Bar: NAME: \"\0\x1\v.Bar\" is not a "
+               "valid identifier.\n"
+               "bar.proto: foo.\0\x1\v.Bar.foo: NAME: "
+               "\"foo.\0\x1\v.Bar.foo\" contains null character.\n"
+               "bar.proto: foo.\0\x1\v.Bar: NAME: "
+               "\"foo.\0\x1\v.Bar\" contains null character.\n"));
+}
+
+TEST_F(ValidationErrorTest, NullCharFileName) {
+  BuildFileWithErrors(
+    "name: \"bar\\000\\001\\013.proto\" "
+    "package: \"outer.foo\"",
+
+    STATIC_STR("bar\0\x1\v.proto: bar\0\x1\v.proto: NAME: "
+               "\"bar\0\x1\v.proto\" contains null character.\n"));
+}
+
+TEST_F(ValidationErrorTest, NullCharPackageName) {
+  BuildFileWithErrors(
+    "name: \"bar.proto\" "
+    "package: \"\\000\\001\\013.\"",
+
+    STATIC_STR("bar.proto: \0\x1\v.: NAME: \"\0\x1\v.\" contains null "
+               "character.\n"));
+}
+
+#undef STATIC_STR
+
 TEST_F(ValidationErrorTest, MissingFileName) {
   BuildFileWithErrors(
     "",
