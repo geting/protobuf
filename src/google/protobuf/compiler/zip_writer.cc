@@ -210,7 +210,7 @@ bool ZipWriter::WriteDirectory() {
   output.WriteLittleEndian32(dir_ofs);  // central directory offset
   WriteShort(&output, 0);   // comment length
 
-  return output.HadError();
+  return !output.HadError();
 }
 
 }  // namespace compiler

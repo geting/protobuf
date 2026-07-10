@@ -537,17 +537,29 @@ bool CommandLineInterface::GeneratorContextImpl::WriteAllToZip(
 
   for (std::map<string, string*>::const_iterator iter = files_.begin();
        iter != files_.end(); ++iter) {
-    zip_writer.Write(iter->first, *iter->second);
+    if (!zip_writer.Write(iter->first, *iter->second)) {
+      std::cerr << filename << ": Failed to write zip entry: " << iter->first
+                << std::endl;
+      stream.Close();
+      return false;
+    }
   }
 
-  zip_writer.WriteDirectory();
+  if (!zip_writer.WriteDirectory()) {
+    std::cerr << filename << ": Failed to write zip directory." << std::endl;
+    stream.Close();
+    return false;
+  }
 
   if (stream.GetErrno() != 0) {
     std::cerr << filename << ": " << strerror(stream.GetErrno()) << std::endl;
+    stream.Close();
+    return false;
   }
 
   if (!stream.Close()) {
     std::cerr << filename << ": " << strerror(stream.GetErrno()) << std::endl;
+    return false;
   }
 
   return true;
