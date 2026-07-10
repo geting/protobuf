@@ -364,6 +364,11 @@ inline bool SupportUnknownEnumValue(const FileDescriptor* descriptor) {
 // Check whether a mesasge has repeated fields.
 bool HasRepeatedFields(const Descriptor* descriptor);
 
+bool GenerateHasBits(const Descriptor* descriptor);
+
+string MapValueImmutableClassName(const Descriptor* descriptor,
+                                  ClassNameResolver* name_resolver);
+
 inline bool IsMapEntry(const Descriptor* descriptor) {
   return descriptor->options().map_entry();
 }

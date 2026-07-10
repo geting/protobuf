@@ -181,6 +181,19 @@ void SetCommonFieldVariables(const FieldDescriptor* descriptor,
                              const FieldGeneratorInfo* info,
                              std::map<string, string>* variables);
 
+const FieldDescriptor* MapKeyField(const FieldDescriptor* descriptor);
+const FieldDescriptor* MapValueField(const FieldDescriptor* descriptor);
+
+void SetMapFieldVariables(const FieldDescriptor* descriptor,
+                          const FieldGeneratorInfo* info,
+                          Context* context,
+                          std::map<string, string>* variables);
+
+void GenerateMapFieldInterfaceMembers(
+    const FieldDescriptor* descriptor,
+    const std::map<string, string>& variables,
+    io::Printer* printer);
+
 // Set some common oneof variables used in OneofFieldGenerators.
 void SetCommonOneofVariables(const FieldDescriptor* descriptor,
                              const OneofGeneratorInfo* info,

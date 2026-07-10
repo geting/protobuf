@@ -773,6 +773,18 @@ bool HasRepeatedFields(const Descriptor* descriptor) {
   return false;
 }
 
+bool GenerateHasBits(const Descriptor* descriptor) {
+  return SupportFieldPresence(descriptor->file()) ||
+      HasRepeatedFields(descriptor);
+}
+
+string MapValueImmutableClassName(const Descriptor* descriptor,
+                                  ClassNameResolver* name_resolver) {
+  const FieldDescriptor* value_field = descriptor->FindFieldByName("value");
+  GOOGLE_CHECK_EQ(FieldDescriptor::TYPE_MESSAGE, value_field->type());
+  return name_resolver->GetImmutableClassName(value_field->message_type());
+}
+
 }  // namespace java
 }  // namespace compiler
 }  // namespace protobuf

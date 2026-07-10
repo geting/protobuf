@@ -42,6 +42,7 @@
 #include <google/protobuf/stubs/logging.h>
 #include <google/protobuf/stubs/common.h>
 #include <google/protobuf/compiler/java/java_context.h>
+#include <google/protobuf/compiler/java/java_doc_comment.h>
 #include <google/protobuf/compiler/java/java_enum_field.h>
 #include <google/protobuf/compiler/java/java_enum_field_lite.h>
 #include <google/protobuf/compiler/java/java_helpers.h>
@@ -51,6 +52,7 @@
 #include <google/protobuf/compiler/java/java_map_field_lite.h>
 #include <google/protobuf/compiler/java/java_message_field.h>
 #include <google/protobuf/compiler/java/java_message_field_lite.h>
+#include <google/protobuf/compiler/java/java_name_resolver.h>
 #include <google/protobuf/compiler/java/java_primitive_field.h>
 #include <google/protobuf/compiler/java/java_primitive_field_lite.h>
 #include <google/protobuf/compiler/java/java_string_field.h>
@@ -66,6 +68,24 @@ namespace compiler {
 namespace java {
 
 namespace {
+
+string MapFieldTypeName(const FieldDescriptor* field,
+                        ClassNameResolver* name_resolver,
+                        bool boxed) {
+  if (GetJavaType(field) == JAVATYPE_MESSAGE) {
+    return name_resolver->GetImmutableClassName(field->message_type());
+  } else if (GetJavaType(field) == JAVATYPE_ENUM) {
+    return name_resolver->GetImmutableClassName(field->enum_type());
+  } else {
+    return boxed ? BoxedPrimitiveTypeName(GetJavaType(field))
+                 : PrimitiveTypeName(GetJavaType(field));
+  }
+}
+
+string MapFieldWireType(const FieldDescriptor* field) {
+  return "com.google.protobuf.WireFormat.FieldType." +
+      string(FieldTypeName(field->type()));
+}
 
 ImmutableFieldGenerator* MakeImmutableGenerator(
     const FieldDescriptor* field, int messageBitIndex, int builderBitIndex,
@@ -297,6 +317,174 @@ void SetCommonFieldVariables(const FieldDescriptor* descriptor,
   (*variables)["disambiguated_reason"] = info->disambiguated_reason;
   (*variables)["constant_name"] = FieldConstantName(descriptor);
   (*variables)["number"] = SimpleItoa(descriptor->number());
+}
+
+const FieldDescriptor* MapKeyField(const FieldDescriptor* descriptor) {
+  GOOGLE_CHECK_EQ(FieldDescriptor::TYPE_MESSAGE, descriptor->type());
+  const Descriptor* message = descriptor->message_type();
+  GOOGLE_CHECK(message->options().map_entry());
+  return message->FindFieldByName("key");
+}
+
+const FieldDescriptor* MapValueField(const FieldDescriptor* descriptor) {
+  GOOGLE_CHECK_EQ(FieldDescriptor::TYPE_MESSAGE, descriptor->type());
+  const Descriptor* message = descriptor->message_type();
+  GOOGLE_CHECK(message->options().map_entry());
+  return message->FindFieldByName("value");
+}
+
+void SetMapFieldVariables(const FieldDescriptor* descriptor,
+                          const FieldGeneratorInfo* info,
+                          Context* context,
+                          std::map<string, string>* variables) {
+  SetCommonFieldVariables(descriptor, info, variables);
+
+  ClassNameResolver* name_resolver = context->GetNameResolver();
+  (*variables)["type"] =
+      name_resolver->GetImmutableClassName(descriptor->message_type());
+  const FieldDescriptor* key = MapKeyField(descriptor);
+  const FieldDescriptor* value = MapValueField(descriptor);
+  const JavaType key_java_type = GetJavaType(key);
+  const JavaType value_java_type = GetJavaType(value);
+
+  (*variables)["key_type"] = MapFieldTypeName(key, name_resolver, false);
+  (*variables)["boxed_key_type"] =
+      MapFieldTypeName(key, name_resolver, true);
+  (*variables)["key_wire_type"] = MapFieldWireType(key);
+  (*variables)["key_default_value"] =
+      DefaultValue(key, true, name_resolver);
+  (*variables)["key_null_check"] = IsReferenceType(key_java_type) ?
+      "if (key == null) { throw new java.lang.NullPointerException(); }" : "";
+  (*variables)["value_null_check"] = IsReferenceType(value_java_type) ?
+      "if (value == null) { throw new java.lang.NullPointerException(); }" : "";
+
+  if (value_java_type == JAVATYPE_ENUM) {
+    (*variables)["value_type"] = "int";
+    (*variables)["boxed_value_type"] = "java.lang.Integer";
+    (*variables)["value_wire_type"] = MapFieldWireType(value);
+    (*variables)["value_default_value"] =
+        DefaultValue(value, true, name_resolver) + ".getNumber()";
+    (*variables)["value_enum_type"] =
+        MapFieldTypeName(value, name_resolver, false);
+
+    if (SupportUnknownEnumValue(descriptor->file())) {
+      (*variables)["unrecognized_value"] =
+          (*variables)["value_enum_type"] + ".UNRECOGNIZED";
+    } else {
+      (*variables)["unrecognized_value"] =
+          DefaultValue(value, true, name_resolver);
+    }
+  } else {
+    (*variables)["value_type"] =
+        MapFieldTypeName(value, name_resolver, false);
+    (*variables)["boxed_value_type"] =
+        MapFieldTypeName(value, name_resolver, true);
+    (*variables)["value_wire_type"] = MapFieldWireType(value);
+    (*variables)["value_default_value"] =
+        DefaultValue(value, true, name_resolver);
+  }
+  (*variables)["type_parameters"] =
+      (*variables)["boxed_key_type"] + ", " + (*variables)["boxed_value_type"];
+  (*variables)["deprecation"] = descriptor->options().deprecated()
+      ? "@java.lang.Deprecated " : "";
+  (*variables)["default_entry"] = (*variables)["capitalized_name"] +
+      "DefaultEntryHolder.defaultEntry";
+}
+
+void GenerateMapFieldInterfaceMembers(
+    const FieldDescriptor* descriptor,
+    const std::map<string, string>& variables,
+    io::Printer* printer) {
+  WriteFieldDocComment(printer, descriptor);
+  printer->Print(
+      variables,
+      "$deprecation$int get$capitalized_name$Count();\n");
+  WriteFieldDocComment(printer, descriptor);
+  printer->Print(
+      variables,
+      "$deprecation$boolean contains$capitalized_name$(\n"
+      "    $key_type$ key);\n");
+  if (GetJavaType(MapValueField(descriptor)) == JAVATYPE_ENUM) {
+    printer->Print(
+        variables,
+        "/**\n"
+        " * Use {@link #get$capitalized_name$Map()} instead.\n"
+        " */\n"
+        "@java.lang.Deprecated\n"
+        "java.util.Map<$boxed_key_type$, $value_enum_type$>\n"
+        "get$capitalized_name$();\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$java.util.Map<$boxed_key_type$, $value_enum_type$>\n"
+        "get$capitalized_name$Map();\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$$value_enum_type$ get$capitalized_name$OrDefault(\n"
+        "    $key_type$ key,\n"
+        "    $value_enum_type$ defaultValue);\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$$value_enum_type$ get$capitalized_name$OrThrow(\n"
+        "    $key_type$ key);\n");
+    if (SupportUnknownEnumValue(descriptor->file())) {
+      printer->Print(
+          variables,
+          "/**\n"
+          " * Use {@link #get$capitalized_name$ValueMap()} instead.\n"
+          " */\n"
+          "@java.lang.Deprecated\n"
+          "java.util.Map<$type_parameters$>\n"
+          "get$capitalized_name$Value();\n");
+      WriteFieldDocComment(printer, descriptor);
+      printer->Print(
+          variables,
+          "$deprecation$java.util.Map<$type_parameters$>\n"
+          "get$capitalized_name$ValueMap();\n");
+      WriteFieldDocComment(printer, descriptor);
+      printer->Print(
+          variables,
+          "$deprecation$\n"
+          "$value_type$ get$capitalized_name$ValueOrDefault(\n"
+          "    $key_type$ key,\n"
+          "    $value_type$ defaultValue);\n");
+      WriteFieldDocComment(printer, descriptor);
+      printer->Print(
+          variables,
+          "$deprecation$\n"
+          "$value_type$ get$capitalized_name$ValueOrThrow(\n"
+          "    $key_type$ key);\n");
+    }
+  } else {
+    printer->Print(
+        variables,
+        "/**\n"
+        " * Use {@link #get$capitalized_name$Map()} instead.\n"
+        " */\n"
+        "@java.lang.Deprecated\n"
+        "java.util.Map<$type_parameters$>\n"
+        "get$capitalized_name$();\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$java.util.Map<$type_parameters$>\n"
+        "get$capitalized_name$Map();\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$\n"
+        "$value_type$ get$capitalized_name$OrDefault(\n"
+        "    $key_type$ key,\n"
+        "    $value_type$ defaultValue);\n");
+    WriteFieldDocComment(printer, descriptor);
+    printer->Print(
+        variables,
+        "$deprecation$\n"
+        "$value_type$ get$capitalized_name$OrThrow(\n"
+        "    $key_type$ key);\n");
+  }
 }
 
 void SetCommonOneofVariables(const FieldDescriptor* descriptor,
